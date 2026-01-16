@@ -411,7 +411,8 @@ class Try<void> {
    * @param e The exception_wrapper
    */
   explicit Try(exception_wrapper e) noexcept
-      : hasValue_(false), e_(std::move(e)) {}
+      : hasValue_(false), e_(std::move(e)) {
+  }
 
   /// Implicit conversion from Try<Unit> to Try<void>
   /* implicit */ inline Try(const Try<Unit>& t) noexcept;

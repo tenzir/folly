@@ -182,7 +182,18 @@ class TaskPromiseCrtpBase
   Task<T> get_return_object() noexcept;
 
   void unhandled_exception() noexcept {
-    result_.emplaceException(exception_wrapper{current_exception()});
+    auto eptr = current_exception();
+    if (!eptr) {
+      // Workaround for ARM64 Darwin bug where current_exception() returns null
+      // in coroutine unhandled_exception() handlers.
+      // See: https://github.com/llvm/llvm-project/issues/92121
+      result_.emplaceException(folly::exception_wrapper(
+          std::make_exception_ptr(std::runtime_error(
+              "Exception lost: current_exception() returned null in "
+              "coroutine unhandled_exception() - ARM64 Darwin bug"))));
+    } else {
+      result_.emplaceException(folly::exception_wrapper{std::move(eptr)});
+    }
   }
 
   Try<StorageType>& result() { return result_; }

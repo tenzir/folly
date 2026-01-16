@@ -18,6 +18,7 @@
 
 #include <folly/Try.h>
 #include <folly/coro/Coroutine.h>
+#include <folly/coro/Result.h>
 #include <folly/coro/Task.h>
 #include <folly/coro/Traits.h>
 #include <folly/coro/ViaIfAsync.h>
@@ -111,6 +112,14 @@ class BlockingWaitPromise final : public BlockingWaitPromiseBase {
     result_->emplace(static_cast<U&&>(value));
   }
 
+  // Support co_yield co_result() pattern to propagate exceptions without
+  // re-throwing. This avoids the ARM64 Darwin bug where current_exception()
+  // returns null in coroutine unhandled_exception() handlers.
+  auto yield_value(co_result<T>&& result) noexcept {
+    *result_ = std::move(result.result());
+    return final_suspend();
+  }
+
   void setTry(folly::Try<T>* result) noexcept { result_ = &result; }
 
  private:
@@ -137,6 +146,14 @@ class BlockingWaitPromise<T&> final : public BlockingWaitPromiseBase {
 
   auto yield_value(T& value) noexcept {
     result_->emplace(std::ref(value));
+    return final_suspend();
+  }
+
+  // Support co_yield co_result() pattern to propagate exceptions without
+  // re-throwing. This avoids the ARM64 Darwin bug where current_exception()
+  // returns null in coroutine unhandled_exception() handlers.
+  auto yield_value(co_result<std::reference_wrapper<T>>&& result) noexcept {
+    *result_ = std::move(result.result());
     return final_suspend();
   }
 
@@ -167,6 +184,14 @@ class BlockingWaitPromise<void> final : public BlockingWaitPromiseBase {
 
   void unhandled_exception() noexcept {
     result_->emplaceException(exception_wrapper{current_exception()});
+  }
+
+  // Support co_yield co_result() pattern to propagate exceptions without
+  // re-throwing. This avoids the ARM64 Darwin bug where current_exception()
+  // returns null in coroutine unhandled_exception() handlers.
+  auto yield_value(co_result<void>&& result) noexcept {
+    *result_ = std::move(result.result());
+    return final_suspend();
   }
 
   void setTry(folly::Try<void>* result) noexcept { result_ = result; }
@@ -261,7 +286,10 @@ template <
     typename Result = await_result_t<Awaitable>,
     std::enable_if_t<std::is_void<Result>::value, int> = 0>
 BlockingWaitTask<void> makeRefBlockingWaitTask(Awaitable&& awaitable) {
-  co_await static_cast<Awaitable&&>(awaitable);
+  // Use co_awaitTry to receive exceptions without re-throwing.
+  // This avoids the ARM64 Darwin bug where current_exception() returns null
+  // in coroutine unhandled_exception() handlers.
+  co_yield co_result(co_await co_awaitTry(static_cast<Awaitable&&>(awaitable)));
 }
 
 template <
@@ -270,7 +298,17 @@ template <
     std::enable_if_t<!std::is_void<Result>::value, int> = 0>
 auto makeRefBlockingWaitTask(Awaitable&& awaitable)
     -> BlockingWaitTask<std::add_lvalue_reference_t<Result>> {
-  co_yield co_await static_cast<Awaitable&&>(awaitable);
+  // Use co_awaitTry to receive exceptions without re-throwing.
+  // This avoids the ARM64 Darwin bug where current_exception() returns null
+  // in coroutine unhandled_exception() handlers.
+  auto result = co_await co_awaitTry(static_cast<Awaitable&&>(awaitable));
+  if (result.hasException()) {
+    // Propagate exception via co_result to avoid re-throwing
+    co_yield co_result<std::reference_wrapper<Result>>(
+        folly::Try<std::reference_wrapper<Result>>(std::move(result).exception()));
+  } else {
+    co_yield result.value();
+  }
 }
 
 class BlockingWaitExecutor final
