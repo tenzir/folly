@@ -23,7 +23,9 @@ extern "C" {
 
 FOLLY_NOINLINE
 void* folly_coro_async_malloc(std::size_t size) {
-  auto p = folly::operator_new(size);
+  constexpr std::size_t align = 64;
+  size = (size + align - 1) & ~(align - 1);
+  auto p = folly::operator_new(size, std::align_val_t{align});
 
   // Add this after the call to prevent the compiler from
   // turning the call to operator new() into a tailcall.
@@ -34,7 +36,9 @@ void* folly_coro_async_malloc(std::size_t size) {
 
 FOLLY_NOINLINE
 void folly_coro_async_free(void* ptr, std::size_t size) {
-  folly::operator_delete(ptr, size);
+  constexpr std::size_t align = 64;
+  size = (size + align - 1) & ~(align - 1);
+  folly::operator_delete(ptr, size, std::align_val_t{align});
 
   // Add this after the call to prevent the compiler from
   // turning the call to operator delete() into a tailcall.
