@@ -182,7 +182,16 @@ class TaskPromiseCrtpBase
   Task<T> get_return_object() noexcept;
 
   void unhandled_exception() noexcept {
-    result_.emplaceException(exception_wrapper{current_exception()});
+    auto ex = current_exception();
+    if (!ex) {
+      // This should never happen - current_exception() returned null inside
+      // unhandled_exception(). This indicates a serious issue with exception
+      // handling, possibly due to DSO boundary issues. (AI explanation)
+      LOG(FATAL) << "current_exception() returned null in unhandled_exception()"
+                    ". This may indicate exception handling issues across "
+                    "shared library boundaries.";
+    }
+    result_.emplaceException(exception_wrapper{ex});
   }
 
   Try<StorageType>& result() { return result_; }
