@@ -70,6 +70,9 @@ folly_add_library(
     folly_synchronization_lifo_sem
 )
 
+# striped_priority_unbounded_blocking_queue depends on striped_throttled_lifo_sem
+# which requires gflags.
+if (FOLLY_HAVE_LIBGFLAGS)
 folly_add_library(
   NAME striped_priority_unbounded_blocking_queue
   HEADERS
@@ -85,3 +88,4 @@ folly_add_library(
     folly_lang_exception
     folly_synchronization_striped_throttled_lifo_sem
 )
+endif()

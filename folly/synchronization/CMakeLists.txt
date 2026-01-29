@@ -401,6 +401,9 @@ folly_add_library(
     ${GLOG_LIBRARIES}
 )
 
+# striped_throttled_lifo_sem uses raw gflags macros (DEFINE_uint64) instead of
+# the portable FOLLY_GFLAGS_DEFINE_uint64. Only build when gflags is available.
+if (FOLLY_HAVE_LIBGFLAGS)
 folly_add_library(
   NAME striped_throttled_lifo_sem
   SRCS
@@ -422,5 +425,6 @@ folly_add_library(
     folly_synchronization_throttled_lifo_sem
     folly_unit
 )
+endif()
 
 add_subdirectory(detail)

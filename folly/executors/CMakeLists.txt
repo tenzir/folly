@@ -470,6 +470,9 @@ folly_add_library(
     Boost::headers
 )
 
+# striped_edf_thread_pool_executor depends on striped_throttled_lifo_sem which
+# requires gflags.
+if (FOLLY_HAVE_LIBGFLAGS)
 folly_add_library(
   NAME striped_edf_thread_pool_executor
   SRCS
@@ -486,6 +489,7 @@ folly_add_library(
     folly_executors_soft_real_time_executor
     folly_synchronization_throttled_lifo_sem
 )
+endif()
 
 add_subdirectory(task_queue)
 add_subdirectory(thread_factory)
