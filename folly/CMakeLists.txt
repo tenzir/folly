@@ -799,6 +799,12 @@ folly_add_library(
   NAME memcpy-impl
   SRCS
     FollyMemcpy.cpp
+    $<$<BOOL:${IS_AARCH64_ARCH}>:memcpy_select_aarch64.cpp>
+  DEPS
+    # Plain target name, not a generator expression: the deferred-dependency
+    # resolver filters DEPS via if(TARGET ...), which only sees literal names
+    # and skips this off aarch64 where folly/external/aor declares no targets.
+    folly_external_aor_memcpy_aarch64
 )
 
 folly_add_library(
@@ -806,6 +812,11 @@ folly_add_library(
   EXCLUDE_FROM_MONOLITH
   SRCS
     FollyMemcpy.cpp
+    $<$<BOOL:${IS_AARCH64_ARCH}>:memcpy_select_aarch64.cpp>
+  DEPS
+    folly_external_aor_memcpy_aarch64-use
+  COMPILE_OPTIONS
+    $<$<BOOL:${IS_AARCH64_ARCH}>:-DFOLLY_MEMCPY_IS_MEMCPY>
 )
 
 # x86 assembly memcpy implementation (not supported on MSVC)
@@ -852,6 +863,9 @@ folly_add_library(
   NAME memset-impl
   SRCS
     FollyMemset.cpp
+    $<$<BOOL:${IS_AARCH64_ARCH}>:memset_select_aarch64.cpp>
+  DEPS
+    folly_external_aor_memset_aarch64
 )
 
 folly_add_library(
@@ -859,6 +873,11 @@ folly_add_library(
   EXCLUDE_FROM_MONOLITH
   SRCS
     FollyMemset.cpp
+    $<$<BOOL:${IS_AARCH64_ARCH}>:memset_select_aarch64.cpp>
+  DEPS
+    folly_external_aor_memset_aarch64-use
+  COMPILE_OPTIONS
+    $<$<BOOL:${IS_AARCH64_ARCH}>:-DFOLLY_MEMSET_IS_MEMSET>
 )
 
 folly_add_library(
@@ -1568,3 +1587,11 @@ add_subdirectory(tracing)
 
 # Resolve deferred dependencies now that all targets exist
 folly_resolve_deferred_dependencies()
+
+# The deferred resolver links these against the aor libraries but does not
+# impose a build order, so the standalone -use shared libraries can race ahead
+# of the aor libraries they link. Order them explicitly.
+if(IS_AARCH64_ARCH)
+  add_dependencies(folly_memcpy-use folly_external_aor_memcpy_aarch64-use)
+  add_dependencies(folly_memset-use folly_external_aor_memset_aarch64-use)
+endif()
