@@ -18,7 +18,7 @@
 # ARM-only optimized memory operations (aarch64 assembly)
 # Only build on Linux aarch64, not Darwin arm64 - these assembly files use
 # Linux ELF directives (.size, etc.) that Darwin's assembler doesn't support
-if(IS_AARCH64_ARCH)
+if(FOLLY_AARCH64_SIMD)
 
 folly_add_library(
   NAME memcpy_aarch64
@@ -33,20 +33,6 @@ folly_add_library(
 )
 
 folly_add_library(
-  NAME memcpy_aarch64-use
-  SRCS
-    memcpy-advsimd.S
-    memcpy-armv8.S
-    memcpy-mops.S
-    memcpy_sve.S
-    memmove-mops.S
-  HEADERS
-    asmdefs.h
-  COMPILE_OPTIONS
-    -DFOLLY_MEMCPY_IS_MEMCPY
-)
-
-folly_add_library(
   NAME memset_aarch64
   SRCS
     memset-advsimd.S
@@ -54,18 +40,6 @@ folly_add_library(
     memset-sve.S
   HEADERS
     asmdefs.h
-)
-
-folly_add_library(
-  NAME memset_aarch64-use
-  SRCS
-    memset-advsimd.S
-    memset-mops.S
-    memset-sve.S
-  HEADERS
-    asmdefs.h
-  COMPILE_OPTIONS
-    -DFOLLY_MEMSET_IS_MEMSET
 )
 
 endif()

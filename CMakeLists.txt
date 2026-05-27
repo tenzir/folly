@@ -114,6 +114,20 @@ else()
   set(IS_AARCH64_ARCH FALSE)
 endif()
 
+# The aarch64 mem*_select_aarch64.cpp dispatchers use ifunc, which musl does
+# not support. Only wire the SIMD paths on a glibc (non-musl) aarch64 target.
+set(FOLLY_AARCH64_SIMD FALSE)
+if(IS_AARCH64_ARCH)
+  execute_process(
+    COMMAND ${CMAKE_CXX_COMPILER} -dumpmachine
+    OUTPUT_VARIABLE _folly_target_triple
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+  if(NOT _folly_target_triple MATCHES "musl")
+    set(FOLLY_AARCH64_SIMD TRUE)
+  endif()
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   # Check target architecture
   if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)

@@ -713,6 +713,9 @@ folly_add_library(
   NAME memcpy-impl
   SRCS
     FollyMemcpy.cpp
+    $<$<BOOL:${FOLLY_AARCH64_SIMD}>:memcpy_select_aarch64.cpp>
+  DEPS
+    folly_external_aor_memcpy_aarch64
 )
 
 folly_add_library(
@@ -767,6 +770,9 @@ folly_add_library(
   NAME memset-impl
   SRCS
     FollyMemset.cpp
+    $<$<BOOL:${FOLLY_AARCH64_SIMD}>:memset_select_aarch64.cpp>
+  DEPS
+    folly_external_aor_memset_aarch64
 )
 
 folly_add_library(
