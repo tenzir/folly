@@ -35,6 +35,8 @@ class AcceptCallback : public folly::AsyncServerSocket::AcceptCallback {
 
   int acceptFd{-1};
 
+  folly::SocketAddress clientAddr;
+
   folly::exception_wrapper error;
 
  private:
@@ -57,6 +59,7 @@ class AcceptCallback : public folly::AsyncServerSocket::AcceptCallback {
     socket_->pauseAccepting();
     socket_->removeAcceptCallback(this, nullptr);
     acceptFd = fdNetworkSocket.toFd();
+    this->clientAddr = clientAddr;
     baton_.post();
   }
 
@@ -116,10 +119,16 @@ Task<std::unique_ptr<Transport>> ServerSocket::accept() {
   if (cb.error) {
     co_yield co_error(std::move(cb.error));
   }
+  // Seed the socket with the peer address that accept() reported. Looking it
+  // up lazily via getpeername() fails with ENOTCONN when the peer resets the
+  // connection before the first call, and Transport::getPeerAddress() is
+  // noexcept, so that failure would terminate the process.
   co_return std::make_unique<Transport>(
       socket_->getEventBase(),
       AsyncSocket::newSocket(
-          socket_->getEventBase(), NetworkSocket::fromFd(cb.acceptFd)));
+          socket_->getEventBase(),
+          NetworkSocket::fromFd(cb.acceptFd),
+          &cb.clientAddr));
 }
 
 } // namespace coro

@@ -357,6 +357,38 @@ TEST_F(TransportTest, SimpleAccept) {
   });
 }
 
+TEST_F(TransportTest, AcceptRecordsPeerAddress) {
+  ServerSocket css(AsyncServerSocket::newSocket(&evb), std::nullopt, 16);
+  auto serverAddr = css.getAsyncServerSocket()->getAddress();
+
+  // Connect with a plain blocking socket and close it with SO_LINGER set to
+  // zero, so the kernel sends a RST before the server accepts the connection.
+  // The accepted socket then is no longer connected and getpeername() fails,
+  // so the peer address must come from accept() itself.
+  auto fd = netops::socket(serverAddr.getFamily(), SOCK_STREAM, 0);
+  ASSERT_NE(fd, NetworkSocket());
+  sockaddr_storage addrStorage;
+  auto addrLen = serverAddr.getAddress(&addrStorage);
+  ASSERT_EQ(
+      0,
+      netops::connect(fd, reinterpret_cast<sockaddr*>(&addrStorage), addrLen));
+  SocketAddress clientAddr;
+  clientAddr.setFromLocalAddress(fd);
+  struct linger lingerOpt = {};
+  lingerOpt.l_onoff = 1;
+  lingerOpt.l_linger = 0;
+  ASSERT_EQ(
+      0,
+      netops::setsockopt(
+          fd, SOL_SOCKET, SO_LINGER, &lingerOpt, sizeof(lingerOpt)));
+  netops::close(fd);
+
+  run([&]() -> Task<> {
+    auto sock = co_await css.accept();
+    EXPECT_EQ(clientAddr, sock->getPeerAddress());
+  });
+}
+
 TEST_F(TransportTest, AcceptCancelled) {
   run([&]() -> Task<> {
     co_await folly::coro::collectAll(requestCancellation(), [&]() -> Task<> {
