@@ -126,7 +126,19 @@ class SingletonThreadLocal {
   using WrapperTL = ThreadLocal<Wrapper, TLTag>;
 
   struct LocalLifetime : State::LocalLifetime {
-    ~LocalLifetime() { destroy(getWrapper()); }
+    ~LocalLifetime() {
+      // Where the C++ runtime destroys thread_local variables from a pthread
+      // thread-specific destructor, as with musl, this may run after the
+      // thread-exit cleanup of ThreadLocal has disposed of the wrapper and
+      // freed this thread's ThreadEntry, which the ThreadLocal fast path still
+      // points to. Looking up the wrapper would then read freed memory. There
+      // is nothing left to untrack anyway: the wrapper's Tracking clears every
+      // cache when it is destroyed, whether before or after this runs.
+      if (threadlocal_detail::StaticMetaBase::dying()) {
+        return;
+      }
+      destroy(getWrapper());
+    }
   };
 
   SingletonThreadLocal() = delete;
