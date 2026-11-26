@@ -16,17 +16,11 @@
 
 #include <folly/detail/thread_local_globals.h>
 
-#include <system_error>
-
-#include <folly/detail/StaticSingletonManager.h>
-#include <folly/lang/Exception.h>
-#include <folly/portability/PThread.h>
-
 namespace folly::detail {
 
 namespace {
 
-/// thread_is_dying_global
+/// thread_is_dying_flag
 ///
 /// This is a hack. The C runtime library provides no indication that a thread
 /// has ended the phase where thread_local variables may be destroyed. Were it
@@ -40,30 +34,27 @@ namespace {
 /// thread.
 ///
 /// https://github.com/bminor/glibc/blob/glibc-2.39/nptl/pthread_create.c#L451-L455
-struct thread_is_dying_global {
-  pthread_key_t key{};
-
-  thread_is_dying_global() {
-    int ret = pthread_key_create(&key, nullptr);
-    if (ret != 0) {
-      throw_exception<std::system_error>(
-          ret, std::generic_category(), "pthread_key_create failed");
-    }
-  }
-};
+///
+/// In musl, which has no __cxa_thread_atexit_impl, the C++ runtime destroys
+/// thread_local variables from a pthread thread-specific destructor of its
+/// own, so they may also be destroyed after the mark. The mark therefore lives
+/// in a trivially-destructible thread_local, which stays valid until the thread
+/// is gone. A pthread thread-specific value would not do: musl clears the value
+/// of every key, with or without a destructor, as __pthread_tsd_run_dtors walks
+/// the keys, and so would forget the mark before the later keys' destructors
+/// run.
+///
+/// https://git.musl-libc.org/cgit/musl/tree/src/thread/pthread_key_create.c?h=v1.2.5
+thread_local bool thread_is_dying_flag = false;
 
 } // namespace
 
 bool thread_is_dying() {
-  auto& global = createGlobal<thread_is_dying_global, void>();
-  return !!pthread_getspecific(global.key);
+  return thread_is_dying_flag;
 }
 
 void thread_is_dying_mark() {
-  auto& global = createGlobal<thread_is_dying_global, void>();
-  if (!pthread_getspecific(global.key)) {
-    pthread_setspecific(global.key, &global.key);
-  }
+  thread_is_dying_flag = true;
 }
 
 } // namespace folly::detail
